@@ -1,0 +1,12 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: 2024.08.19
+_src_path: gh:scientific-python/cookie
+backend: hatch
+email: nstarman@users.noreply.github.com
+full_name: Nathaniel Starkman
+license: Apache
+org: nstarman
+project_name: mvgkde
+project_short_description: MultiVariate Gaussian Kernel Density Estimator
+url: https://github.com/nstarman/mvgkde
+vcs: true

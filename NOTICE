@@ -1,0 +1,5 @@
+This software modifies code from following third-party software:
+
+- JAX (https://github.com/google/jax)
+  Copyright 2018 Google LLC.
+  Licensed under the Apache License, Version 2.0.

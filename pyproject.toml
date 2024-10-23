@@ -1,0 +1,169 @@
+[project]
+name = "mvgkde"
+dynamic = ["version"]
+description = "MultiVariate Gaussian Kernel Density Estimator"
+readme = "README.md"
+license.file = "LICENSE"
+requires-python = ">=3.11"
+authors = [
+  { name = "Nathaniel Starkman", email = "nstarman@users.noreply.github.com" },
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+  "Typing :: Typed",
+]
+dependencies = [
+    "jax>=0.4.35",
+    "jaxlib>=0.4.35",
+    "jaxtyping>=0.2.34",
+    "numpy>=2.1.2",
+]
+
+
+[project.optional-dependencies]
+test = [
+  "hypothesis>=6.115.4",
+  "pytest >=6",
+  "pytest-cov >=3",
+]
+dev = ["mvgkde[test]"]
+
+[project.urls]
+Homepage = "https://github.com/nstarman/mvgkde"
+"Bug Tracker" = "https://github.com/nstarman/mvgkde/issues"
+Changelog = "https://github.com/nstarman/mvgkde/releases"
+
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+
+[tool.hatch]
+version.source = "vcs"
+build.hooks.vcs.version-file = "src/mvgkde/_version.py"
+
+
+[tool.coverage]
+run.source = ["mvgkde"]
+report.exclude_also = [
+    # Have to re-enable the standard pragma
+    'pragma: no cover',
+    # Ignore type-checking stuff
+    '\.\.\.',
+    'if TYPE_CHECKING:',
+    'if typing.TYPE_CHECKING:',
+    # Ignore contents of abstract methods
+    '@abc.abstractmethod',
+    '@abstractmethod',
+]
+
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src"]
+strict = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+warn_unreachable = true
+warn_unused_configs = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+
+[[tool.mypy.overrides]]
+module = "mvgkde.*"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disable_error_code = ["name-defined"] # <- jaxtyping
+
+
+[tool.pylint]
+py-version = "3.11"
+ignore-paths = [".*/_version.py"]
+reports.output-format = "colorized"
+similarities.ignore-imports = "yes"
+messages_control.disable = [
+  "design",
+  "fixme",
+  "line-too-long",
+  "missing-module-docstring",
+  "missing-function-docstring",
+  "wrong-import-position",
+]
+
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
+xfail_strict = true
+filterwarnings = ["error"]
+log_cli_level = "INFO"
+testpaths = ["src/mvgkde", "tests"]
+
+
+[tool.repo-review]
+ignore = ["RTD100"]
+
+
+[tool.ruff]
+
+[tool.ruff.lint]
+extend-select = ["ALL"]
+ignore = [
+  "ANN401",
+  "D203",    # 1 blank line required before class docstring
+  "F722",    # Syntax error in forward annotation <- jaxtyping
+  "F821",  # Undefined name  # <- jaxtyping
+  "FIX002",  # Line contains TODO
+  "PLR09",    # Too many <...>
+  "PLR2004",  # Magic value used in comparison
+  "ISC001",   # Conflicts with formatter
+  "TD002",   # Missing author in TODO
+  "TD003",  # Missing issue link on the line following this TODO
+]
+
+[tool.ruff.lint.per-file-ignores]
+"docs/conf.py" = [
+"A001",   # Variable `copyright` is shadowing a Python builtin
+"INP001", # implicit namespace package
+]
+"tests/**" = [
+    "ANN",
+    "D10",
+    "INP001",
+    "S101",
+    "T20",
+]
+"noxfile.py" = ["T20"]
+
+[tool.ruff.lint.flake8-type-checking]
+    exempt-modules = []
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+extra-standard-library = ["typing_extensions"]
+known-local-folder = ["mvgkde"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+
+[tool.uv]
+dev-dependencies = [
+    "hypothesis>=6.115.4",
+    "ipykernel>=6.29.5",
+    "matplotlib>=3.9.2",
+    "pre-commit>=4.0.1",
+    "pytest>=8.3.3",
+    "sybil>=8.0.0",
+]
