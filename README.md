@@ -77,7 +77,7 @@ fig = plot_kde(kde)
 plt.show()
 ```
 
-![Scotts Rule](docs/bw_scott.png)
+![Scotts Rule](https://raw.githubusercontent.com/nstarman/mvgkde/main/docs/bw_scott.png)
 
 Here's an example with a per-dimension bandwidth. This is not possible with the
 `jax.scipy.gaussian_kde`:
@@ -89,7 +89,7 @@ fig = plot_kde(kde)
 plt.show()
 ```
 
-![Per-Dimension Bandwidth](docs/bw_perdim.png)
+![Per-Dimension Bandwidth](https://raw.githubusercontent.com/nstarman/mvgkde/main/docs/bw_perdim.png)
 
 Lastly, here's an example with 2D bandwidth matrix:
 
@@ -101,7 +101,7 @@ fig = plot_kde(kde)
 plt.show()
 ```
 
-![2D Bandwidth Matrix](docs/bw_matrix.png)
+![2D Bandwidth Matrix](https://raw.githubusercontent.com/nstarman/mvgkde/main/docs/bw_matrix.png)
 
 The previous examples are using the convenience function `gaussian_kde`. This
 actually just calls the constructor method
@@ -122,7 +122,7 @@ fig = plot_kde(kde)
 plt.show()
 ```
 
-![Covariance Matrix](docs/cov.png)
+![Covariance Matrix](https://raw.githubusercontent.com/nstarman/mvgkde/main/docs/cov.png)
 
 ## Acknowledgments
 
