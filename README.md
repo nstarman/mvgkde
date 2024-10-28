@@ -4,9 +4,10 @@
 This is a micro-package, containing the single class `MultiVarGaussianKDE` (and
 helper function `gaussian_kde`) to estimate the probability density function of
 a multivariate dataset using a Gaussian kernel. This package modifies the
-`jax.scipy.gaussian_kde` class (which is based on the `scipy.stats.gaussian_kde`
-class), but allows for full control over the covariance matrix of the kernel,
-even per-dimension bandwidths. See the Documentation below for more information.
+`jax.scipy.stats.gaussian_kde` class (which is based on the
+`scipy.stats.gaussian_kde` class), but allows for full control over the
+covariance matrix of the kernel, even per-dimension bandwidths. See the
+Documentation below for more information.
 
 ## Installation
 
@@ -68,10 +69,10 @@ def plot_kde(kde: MultiVariateGaussianKDE) -> plt.Figure:
     return fig
 ```
 
-Here's an example that can be done with `jax.scipy.gaussian_kde`:
+Here's an example that can be done with `jax.scipy.stats.gaussian_kde`:
 
 ```python
-kde = gaussian_kde(dataset, bw="scott")
+kde = gaussian_kde(dataset, bw_method="scott")
 
 fig = plot_kde(kde)
 plt.show()
@@ -80,10 +81,10 @@ plt.show()
 ![Scotts Rule](https://raw.githubusercontent.com/nstarman/mvgkde/main/docs/bw_scott.png)
 
 Here's an example with a per-dimension bandwidth. This is not possible with the
-`jax.scipy.gaussian_kde`:
+`jax.scipy.stats.gaussian_kde`:
 
 ```python
-kde = gaussian_kde(dataset, bw=jnp.array([0.15, 1.3]))
+kde = gaussian_kde(dataset, bw_method=jnp.array([0.15, 1.3]))
 
 fig = plot_kde(kde)
 plt.show()
@@ -95,7 +96,7 @@ Lastly, here's an example with 2D bandwidth matrix:
 
 ```python
 bw = jnp.array([[0.15, 3], [3, 1.3]])
-kde = gaussian_kde(dataset, bw=bw)
+kde = gaussian_kde(dataset, bw_method=bw)
 
 fig = plot_kde(kde)
 plt.show()

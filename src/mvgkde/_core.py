@@ -419,6 +419,19 @@ def gaussian_kde(
     bw_method: BWMethodOpts = None,
     weights: Weights | None = None,
 ) -> MultiVariateGaussianKDE:
+    """Gaussian Kernel Density Estimator.
+
+    JAX implementation of `scipy.stats.gaussian_kde`.
+
+    :param dataset: Data from which to estimate the distribution. If 1D, shape
+        is (n_data,). If 2D, shape is (n_dimensions, n_data).
+    :param bw_method: Either "scott", "silverman", a scalar value, or a callable
+        function which takes ``self`` as a parameter.
+    :param weights: Weights of the same shape as the dataset.
+
+    :return: A Gaussian KDE object.
+
+    """
     return MultiVariateGaussianKDE.from_bandwidth(
         dataset,
         bw=bw_method,
