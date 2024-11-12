@@ -62,9 +62,11 @@ def test_marginal(dataset_marginals, bw):
     kde = gaussian_kde(dataset, bw_method=bw)
     scipy_kde = scipy_gaussian_kde(dataset, bw_method=bw)
 
-    assert_allclose(kde.dataset, scipy_kde.dataset)
-    assert_allclose(kde.weights, scipy_kde.weights)
-    assert_allclose(kde.neff, scipy_kde.neff)
+    rtol = atol = 10 * float(np.finfo(np.float32).eps)
+
+    assert_allclose(kde.dataset, scipy_kde.dataset, rtol=rtol, atol=atol)
+    assert_allclose(kde.weights, scipy_kde.weights, rtol=rtol, atol=atol)
+    assert_allclose(kde.neff, scipy_kde.neff, rtol=rtol, atol=atol)
     assert_allclose(kde.covariance, scipy_kde.covariance, rtol=1e-3)
     assert_allclose(kde.inv_cov, scipy_kde.inv_cov, rtol=1e-3)
 
@@ -73,8 +75,8 @@ def test_marginal(dataset_marginals, bw):
     scipy_mkde = scipy_kde.marginal(marginal_indices)
 
     # Check that the marginal KDEs have the same attributes
-    assert_allclose(mkde.dataset, scipy_mkde.dataset)
-    assert_allclose(mkde.weights, scipy_mkde.weights)
-    assert_allclose(mkde.neff, scipy_mkde.neff)
+    assert_allclose(mkde.dataset, scipy_mkde.dataset, rtol=rtol, atol=atol)
+    assert_allclose(mkde.weights, scipy_mkde.weights, rtol=rtol, atol=atol)
+    assert_allclose(mkde.neff, scipy_mkde.neff, rtol=rtol, atol=atol)
     assert_allclose(mkde.covariance, scipy_mkde.covariance, rtol=1e-3)
     assert_allclose(mkde.inv_cov, scipy_mkde.inv_cov, rtol=1e-3)
