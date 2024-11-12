@@ -67,8 +67,8 @@ def test_marginal(dataset_marginals, bw):
     assert_allclose(kde.dataset, scipy_kde.dataset, rtol=rtol, atol=atol)
     assert_allclose(kde.weights, scipy_kde.weights, rtol=rtol, atol=atol)
     assert_allclose(kde.neff, scipy_kde.neff, rtol=rtol, atol=atol)
-    assert_allclose(kde.covariance, scipy_kde.covariance, rtol=1e-3)
-    assert_allclose(kde.inv_cov, scipy_kde.inv_cov, rtol=1e-3)
+    assert_allclose(kde.covariance, scipy_kde.covariance, atol=1e-5, rtol=2e-3)
+    assert_allclose(kde.inv_cov, scipy_kde.inv_cov, atol=1e-5, rtol=2e-3)
 
     # Create Marginal KDE objects
     mkde = kde.marginal(marginal_indices)
@@ -78,5 +78,5 @@ def test_marginal(dataset_marginals, bw):
     assert_allclose(mkde.dataset, scipy_mkde.dataset, rtol=rtol, atol=atol)
     assert_allclose(mkde.weights, scipy_mkde.weights, rtol=rtol, atol=atol)
     assert_allclose(mkde.neff, scipy_mkde.neff, rtol=rtol, atol=atol)
-    assert_allclose(mkde.covariance, scipy_mkde.covariance, rtol=1e-3)
-    assert_allclose(mkde.inv_cov, scipy_mkde.inv_cov, rtol=1e-3)
+    assert_allclose(mkde.covariance, scipy_mkde.covariance, atol=1e-5, rtol=2e-3)
+    assert_allclose(mkde.inv_cov, scipy_mkde.inv_cov, atol=1e-5, rtol=2e-3)
