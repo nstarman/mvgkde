@@ -45,7 +45,11 @@ def generate_points(dataset: Array) -> Array:
     )
 
 
-@settings(deadline=1_000)  # 1 s b/c of jit compilation
+##############################################################################
+# Test the mvgkde vs jax.scipy implementation
+
+
+@settings(deadline=None)  # TODO: address jit compilation speed change
 @given(dataset=dataset_strategy, bw=bw_method_strategy)
 def test_evaluate(dataset, bw):
     kde = gaussian_kde(dataset, bw_method=bw)
@@ -56,7 +60,7 @@ def test_evaluate(dataset, bw):
     assert np.allclose(kde.evaluate(points), jax_kde(points), atol=1e-7)
 
 
-@settings(deadline=1_000)  # 1 s b/c of jit compilation
+@settings(deadline=None)  # TODO: address jit compilation speed change
 @given(dataset=dataset_strategy, bw=bw_method_strategy)
 def test_call(dataset, bw):
     kde = gaussian_kde(dataset, bw_method=bw)
@@ -66,7 +70,7 @@ def test_call(dataset, bw):
     assert np.allclose(kde(points), jax_kde(points), atol=1e-7)
 
 
-@settings(deadline=1_000)  # 1 s b/c of jit compilation
+@settings(deadline=None)  # TODO: address jit compilation speed change
 @given(dataset=dataset_strategy, bw=bw_method_strategy)
 def test_pdf(dataset, bw):
     kde = gaussian_kde(dataset, bw_method=bw)
@@ -76,7 +80,7 @@ def test_pdf(dataset, bw):
     assert np.allclose(kde.pdf(points), jax_kde(points), atol=1e-7)
 
 
-@settings(deadline=1_000)  # 1 s b/c of jit compilation
+@settings(deadline=None)  # TODO: address jit compilation speed change
 @given(dataset=dataset_strategy, bw=bw_method_strategy)
 def test_logpdf(dataset, bw):
     kde = gaussian_kde(dataset, bw_method=bw)
@@ -86,7 +90,7 @@ def test_logpdf(dataset, bw):
     assert np.allclose(kde.logpdf(points), jax_kde.logpdf(points), atol=1e-5)
 
 
-@settings(deadline=1_000)  # 1 s b/c of jit compilation
+@settings(deadline=None)  # TODO: address jit compilation speed change
 @given(dataset=dataset_strategy, bw=bw_method_strategy)
 def test_integrate_gaussian(dataset, bw):
     kde = gaussian_kde(dataset, bw_method=bw)
@@ -100,7 +104,7 @@ def test_integrate_gaussian(dataset, bw):
     assert np.allclose(result, jax_result, atol=1e-5)
 
 
-@settings(deadline=1_000)  # 1 s b/c of jit compilation
+@settings(deadline=None)  # TODO: address jit compilation speed change
 @given(dataset=dataset_strategy, bw=bw_method_strategy)
 def test_integrate_box_1d(dataset, bw):
     kde = gaussian_kde(dataset, bw_method=bw)
@@ -121,7 +125,7 @@ def test_integrate_box_1d(dataset, bw):
     assert np.allclose(result, jax_result, atol=1e-6)
 
 
-@settings(deadline=1_000)  # 1 s b/c of jit compilation
+@settings(deadline=None)  # TODO: address jit compilation speed change
 @given(dataset=dataset_strategy, bw=bw_method_strategy)
 def test_integrate_kde(dataset, bw):
     kde = gaussian_kde(dataset, bw_method=bw)
@@ -133,7 +137,7 @@ def test_integrate_kde(dataset, bw):
     assert np.allclose(result, jax_result, atol=1e-6)
 
 
-@settings(deadline=1_000)  # 1 s b/c of jit compilation
+@settings(deadline=None)  # TODO: address jit compilation speed change
 @given(dataset=dataset_strategy, bw=bw_method_strategy)
 def test_integrate_box(dataset, bw):
     kde = gaussian_kde(dataset, bw_method=bw)
@@ -147,7 +151,7 @@ def test_integrate_box(dataset, bw):
         jax_kde.integrate_box(low, high)
 
 
-@settings(deadline=1_000)  # 1 s b/c of jit compilation
+@settings(deadline=None)  # TODO: address jit compilation speed change
 @given(dataset=dataset_strategy, bw=bw_method_strategy)
 def test_resample(dataset, bw):
     kde = gaussian_kde(dataset, bw_method=bw)
