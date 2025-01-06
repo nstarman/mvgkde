@@ -1,8 +1,8 @@
 """MultiVariate Gaussian Kernel Density Estimator (mvgkde)."""
 
 __all__: list[str] = [
-    "__version__",
     "MultiVariateGaussianKDE",
+    "__version__",
     "gaussian_kde",
 ]
 
