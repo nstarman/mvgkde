@@ -137,12 +137,12 @@ class MultiVariateGaussianKDE:
     @property
     def d(self) -> int:
         """Number of dimensions (features) in the dataset."""
-        return cast(int, self.dataset.shape[0])
+        return cast("int", self.dataset.shape[0])
 
     @property
     def n(self) -> int:
         """Number of data points in the dataset."""
-        return cast(int, self.dataset.shape[1])
+        return cast("int", self.dataset.shape[1])
 
     # ====================================================================
     # Evaluation
