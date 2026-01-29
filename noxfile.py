@@ -37,7 +37,7 @@ def pylint(session: nox.Session) -> None:
     session.run("pylint", "mvgkde", *session.posargs)
 
 
-@nox.session(default=True)
+@nox.session(default=True, venv_backend="uv")
 def tests(session: nox.Session) -> None:
     """Run the unit and regular tests."""
     session.install(".", "--group", "test")
