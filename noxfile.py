@@ -1,3 +1,7 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# dependencies = ["nox"]
+# ///
 """Nox configuration file."""
 
 import shutil
@@ -8,11 +12,10 @@ import nox
 DIR = Path(__file__).parent.resolve()
 
 nox.needs_version = ">=2024.3.2"
-nox.options.sessions = ["lint", "pylint", "tests"]
 nox.options.default_venv_backend = "uv|virtualenv"
 
 
-@nox.session
+@nox.session(default=True)
 def lint(session: nox.Session) -> None:
     """Run the linter."""
     session.install("pre-commit")
@@ -25,7 +28,7 @@ def lint(session: nox.Session) -> None:
     )
 
 
-@nox.session
+@nox.session(default=True)
 def pylint(session: nox.Session) -> None:
     """Run PyLint."""
     # This needs to be installed into the package environment, and is slower
@@ -34,7 +37,7 @@ def pylint(session: nox.Session) -> None:
     session.run("pylint", "mvgkde", *session.posargs)
 
 
-@nox.session
+@nox.session(default=True)
 def tests(session: nox.Session) -> None:
     """Run the unit and regular tests."""
     session.install(".[test]")
@@ -50,3 +53,7 @@ def build(session: nox.Session) -> None:
 
     session.install("build")
     session.run("python", "-m", "build")
+
+
+if __name__ == "__main__":
+    nox.main()

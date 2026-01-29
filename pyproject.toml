@@ -39,6 +39,14 @@ test = [
 ]
 dev = ["mvgkde[test]"]
 
+[dependency-groups]
+dev = [{ include-group = "test" }]
+test = [
+  "hypothesis>=6.115.4",
+  "pytest>=6",
+  "pytest-cov>=3",
+]
+
 [project.urls]
 Homepage = "https://github.com/nstarman/mvgkde"
 "Bug Tracker" = "https://github.com/nstarman/mvgkde/issues"
@@ -108,6 +116,7 @@ addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
 xfail_strict = true
 filterwarnings = ["error"]
 log_cli_level = "INFO"
+log_level = "INFO"
 testpaths = ["src/mvgkde", "tests"]
 
 
