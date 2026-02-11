@@ -28,16 +28,27 @@ dependencies = [
     "jaxlib>=0.4.35",
     "jaxtyping>=0.2.34",
     "numpy>=2.1.2",
+    "typing-extensions>=4.12.2",
 ]
 
 
-[project.optional-dependencies]
+[dependency-groups]
+dev = [
+  { include-group = "test" },
+  { include-group = "lint" },
+  "ipykernel>=6.29.5",
+  "matplotlib>=3.9.2",
+]
+lint = [
+  "pre-commit>=4.0.1",
+  "pylint>=3.2",
+]
 test = [
   "hypothesis>=6.115.4",
-  "pytest >=6",
-  "pytest-cov >=3",
+  "pytest>=8",
+  "pytest-cov>=7.0.0",
+  "sybil>=8.0.0",
 ]
-dev = ["mvgkde[test]"]
 
 [project.urls]
 Homepage = "https://github.com/nstarman/mvgkde"
@@ -108,6 +119,7 @@ addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
 xfail_strict = true
 filterwarnings = ["error"]
 log_cli_level = "INFO"
+log_level = "INFO"
 testpaths = ["src/mvgkde", "tests"]
 
 
@@ -157,14 +169,3 @@ known-local-folder = ["mvgkde"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
-
-
-[tool.uv]
-dev-dependencies = [
-    "hypothesis>=6.115.4",
-    "ipykernel>=6.29.5",
-    "matplotlib>=3.9.2",
-    "pre-commit>=4.0.1",
-    "pytest>=8.3.3",
-    "sybil>=8.0.0",
-]
