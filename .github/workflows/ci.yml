@@ -59,7 +59,7 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install the project
-        run: uv sync --extra test
+        run: uv sync --group test
 
       - name: Test package
         run: >-
