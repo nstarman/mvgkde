@@ -43,7 +43,9 @@ def tests(session: nox.Session) -> None:
     # Install the project
     session.install(".")
     # Install test dependencies from dependency group
-    session.install("hypothesis>=6.115.4", "pytest>=8", "pytest-cov>=7.0.0")
+    session.install(
+        "hypothesis>=6.115.4", "pytest>=8", "pytest-cov>=7.0.0", "sybil>=8.0.0"
+    )
     session.run("pytest", *session.posargs)
 
 
