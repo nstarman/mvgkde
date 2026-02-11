@@ -33,7 +33,12 @@ dependencies = [
 
 
 [dependency-groups]
-dev = [{ include-group = "test" }, { include-group = "lint" }]
+dev = [
+  { include-group = "test" },
+  { include-group = "lint" },
+  "ipykernel>=6.29.5",
+  "matplotlib>=3.9.2",
+]
 lint = [
   "pre-commit>=4.0.1",
   "pylint>=3.2",
@@ -164,14 +169,3 @@ known-local-folder = ["mvgkde"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
-
-
-[tool.uv]
-dev-dependencies = [
-    "hypothesis>=6.115.4",
-    "ipykernel>=6.29.5",
-    "matplotlib>=3.9.2",
-    "pre-commit>=4.0.1",
-    "pytest>=8.3.3",
-    "sybil>=8.0.0",
-]
