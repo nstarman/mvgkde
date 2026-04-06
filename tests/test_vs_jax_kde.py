@@ -19,9 +19,11 @@ dataset_strategy = arrays(
     ),
     elements=st.floats(-10, 10),
 ).filter(
-    lambda x: np.all(np.std(x, axis=1) > 1e-1)  # avoid singular matrices
-    and np.all(  # avoid only repeated values
-        np.apply_along_axis(lambda col: len(np.unique(col)) > 5, axis=1, arr=x),
+    lambda x: (
+        np.all(np.std(x, axis=1) > 1e-1)  # avoid singular matrices
+        and np.all(  # avoid only repeated values
+            np.apply_along_axis(lambda col: len(np.unique(col)) > 5, axis=1, arr=x),
+        )
     ),
 )
 
