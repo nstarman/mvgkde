@@ -57,7 +57,10 @@ Changelog = "https://github.com/nstarman/mvgkde/releases"
 
 
 [build-system]
-requires = ["hatchling>=1.26,<1.28", "hatch-vcs>=0.4"]
+requires = [
+  "hatchling>=1.26,<1.28",  # <1.28: hatchling>=1.28 emits Metadata-Version 2.5 which is not yet valid per packaging standards
+  "hatch-vcs>=0.4",
+]
 build-backend = "hatchling.build"
 
 
