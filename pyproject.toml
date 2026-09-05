@@ -57,7 +57,7 @@ Changelog = "https://github.com/nstarman/mvgkde/releases"
 
 
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling>=1.26,<1.28", "hatch-vcs>=0.4"]
 build-backend = "hatchling.build"
 
 
