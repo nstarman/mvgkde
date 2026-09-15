@@ -19,12 +19,16 @@ nox.options.default_venv_backend = "uv"
 @session(uv_groups=["lint"], reuse_venv=True, default=True)
 def lint(s: nox.Session) -> None:
     """Run the linter."""
+    # no-commit-to-branch always fails here: CI checks out the real
+    # `main` branch on every push, which is exactly what the hook exists to
+    # block for a human running `git commit`/`git push` locally.
     s.run(
         "pre-commit",
         "run",
         "--all-files",
         "--show-diff-on-failure",
         *s.posargs,
+        env={"SKIP": "no-commit-to-branch"},
     )
 
 
