@@ -2,12 +2,13 @@
 # requires-python = ">=3.11"
 # dependencies = ["contourpy", "numpy", "resvg-py"]
 # ///
-"""Draw the mvgkde logo: a kernel density estimate, as filled contours.
+"""Draw the mvgkde logo: a kernel density estimate of a handwritten M.
 
-Five data points, each with its own tilted Gaussian kernel, summed into a
-density and drawn as filled contours in the colours of the README's plots, on a
-rounded square. The logo is written as an SVG, sharp at any size; for a bitmap,
-name a .png and give its size::
+Points scattered along a slanted script M, from a fixed seed, and their kernel
+density estimate with one full bandwidth matrix, tilted with the slant, drawn
+as filled contours in the colours of the README's plots on a rounded square.
+The logo is written as an SVG, sharp at any size; for a bitmap, name a .png and
+give its size::
 
     uv run docs/_static/make_logo.py                     # favicon.svg
     uv run docs/_static/make_logo.py --size 2048 big.png
@@ -20,17 +21,33 @@ from pathlib import Path
 import contourpy
 import numpy as np
 
-# The data points and each one's kernel covariance, in the square [-1.5, 1.5]^2.
-POINTS = np.array([[-0.9, -0.5], [0.1, 0.4], [0.8, -0.3], [-0.2, -0.9], [0.5, 0.9]])
-COVARIANCES = np.array(
+# A script M's stroke, upright: a lead-in curling up the left leg, an arch down
+# into the middle, a second arch, and the right leg ending in a flick. It is
+# slanted, scaled into the square [-1.5, 1.5]^2, and points scattered along it.
+STROKE = np.array(
     [
-        [[0.30, 0.18], [0.18, 0.20]],
-        [[0.18, -0.10], [-0.10, 0.30]],
-        [[0.25, 0.12], [0.12, 0.14]],
-        [[0.20, 0.00], [0.00, 0.10]],
-        [[0.12, 0.08], [0.08, 0.22]],
+        [-1.05, -0.75],
+        [-0.95, -0.2],
+        [-0.82, 0.55],
+        [-0.62, 0.85],
+        [-0.42, 0.6],
+        [-0.25, 0.0],
+        [-0.12, -0.45],
+        [0.0, -0.1],
+        [0.15, 0.55],
+        [0.38, 0.85],
+        [0.58, 0.55],
+        [0.68, 0.0],
+        [0.72, -0.6],
+        [0.85, -0.85],
+        [1.05, -0.7],
     ],
 )
+SLANT = 0.32  # x moves right by this much per unit up
+SCALE = 0.88
+SEED, SAMPLES = 2, 60  # the draw: which, and how many points
+SCATTER = 0.06  # the points' spread about the stroke
+BANDWIDTH = 0.10  # the kernels' width across the slant; 1.6 times it along it
 FLOOR = 0.08  # the lowest contour; below it the square shows through
 # The bands' colours, lowest first: matplotlib's gist_earth_r, as the README's
 # plots use, sampled at each band's middle.
@@ -53,13 +70,54 @@ SVG = """\
 """
 
 
+def curve(points: np.ndarray, per_span: int = 60) -> np.ndarray:
+    """Return points along an open Catmull-Rom curve through ``points``."""
+    p = np.vstack([points[:1], points, points[-1:]])
+    t = np.linspace(0, 1, per_span, endpoint=False)[:, None]
+    spans = []
+    for p0, p1, p2, p3 in zip(p, p[1:], p[2:], p[3:], strict=False):
+        spans.append(
+            0.5
+            * (
+                2 * p1
+                + (p2 - p0) * t
+                + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t**2
+                + (3 * p1 - p0 - 3 * p2 + p3) * t**3
+            ),
+        )
+    return np.concatenate(spans)
+
+
+def sample() -> np.ndarray:
+    """Return the data: SAMPLES points scattered along the slanted stroke."""
+    line = curve(STROKE)
+    line[:, 0] += SLANT * line[:, 1]
+    line *= SCALE
+    # Spread evenly by length along the stroke, then scattered about it.
+    length = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(line, axis=0).T))])
+    rng = np.random.default_rng(SEED)
+    at = np.sort(rng.uniform(0, length[-1], SAMPLES))
+    points = np.column_stack(
+        [np.interp(at, length, line[:, 0]), np.interp(at, length, line[:, 1])],
+    )
+    return points + rng.normal(0, SCATTER, points.shape)
+
+
 def density(x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """Return the sum of the normalised Gaussian kernels at ``x``, ``y``."""
+    """Return the kernel density estimate of the data at ``x``, ``y``.
+
+    Every kernel shares one full bandwidth matrix, stretched along the slant.
+    """
+    along = np.array([SLANT, 1.0]) / np.hypot(SLANT, 1.0)
+    across = np.array([-along[1], along[0]])
+    bandwidth = (1.6 * BANDWIDTH) ** 2 * np.outer(along, along)
+    bandwidth += BANDWIDTH**2 * np.outer(across, across)
+    inverse = np.linalg.inv(bandwidth)
+    norm = 1 / np.sqrt(np.linalg.det(bandwidth))  # FLOOR is on this scale
     z = np.zeros_like(x)
-    for mu, cov in zip(POINTS, COVARIANCES, strict=True):
+    for mu in sample():
         d = np.stack([x - mu[0], y - mu[1]], axis=-1)
-        mahalanobis = np.einsum("...i,ij,...j", d, np.linalg.inv(cov), d)
-        z += np.exp(-0.5 * mahalanobis) / np.sqrt(np.linalg.det(cov))
+        z += norm * np.exp(-0.5 * np.einsum("...i,ij,...j", d, inverse, d))
     return z
 
 
