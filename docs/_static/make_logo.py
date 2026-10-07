@@ -1,7 +1,10 @@
+# Copyright (c) 2025 Nathaniel Starkman
+# SPDX-License-Identifier: Apache-2.0
 # /// script
 # requires-python = ">=3.11"
 # dependencies = ["contourpy", "numpy", "resvg-py"]
 # ///
+
 """Draw the mvgkde logo: a kernel density estimate of a handwritten M.
 
 Points scattered along a slanted script M, from a fixed seed, and their kernel

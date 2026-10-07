@@ -1,7 +1,10 @@
 #!/usr/bin/env -S uv run --script
+# Copyright (c) 2025 Nathaniel Starkman
+# SPDX-License-Identifier: Apache-2.0
 # /// script
 # dependencies = ["nox", "nox_uv"]
 # ///
+
 """Nox configuration file."""
 
 import os

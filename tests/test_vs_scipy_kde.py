@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Nathaniel Starkman
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests comparing mvgkde to jax.scipy."""
 
 import numpy as np
