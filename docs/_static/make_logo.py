@@ -1,9 +1,9 @@
+# Copyright (c) 2025 Nathaniel Starkman
+# SPDX-License-Identifier: Apache-2.0
 # /// script
 # requires-python = ">=3.11"
 # dependencies = ["contourpy", "numpy", "resvg-py"]
 # ///
-# Copyright (c) 2025 Nathaniel Starkman
-# SPDX-License-Identifier: Apache-2.0
 
 """Draw the mvgkde logo: a kernel density estimate of a handwritten M.
 
