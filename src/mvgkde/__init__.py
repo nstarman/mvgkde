@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Nathaniel Starkman
+# SPDX-License-Identifier: Apache-2.0
+
 """MultiVariate Gaussian Kernel Density Estimator (mvgkde)."""
 
 __all__: list[str] = [

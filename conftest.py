@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Nathaniel Starkman
+# SPDX-License-Identifier: Apache-2.0
+
 """Doctest configuration."""
 
 from collections.abc import Callable, Iterable, Sequence
