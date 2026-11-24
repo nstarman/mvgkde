@@ -729,8 +729,9 @@ def _local_covariance(
             c, dc = count(s, d2)
             return s - c / dc
 
-        # Bisect without gradients. At the ends of the bracket every other
-        # point is as far as the farthest, or as near as the nearest.
+        # Bisect without gradients. At the ends of the bracket every other point
+        # that isn't an exact duplicate is as far as the farthest, or as near as
+        # the nearest, and the count is still at least, or at most, k.
         d2_ = lax.stop_gradient(d2)
 
         def bisect(_: int, b: tuple[Scalar, Scalar]) -> tuple[Scalar, Scalar]:
@@ -740,7 +741,10 @@ def _local_covariance(
 
         pos = others & (d2_ > 0)
         log_d2 = jnp.log(jnp.where(pos, d2_, 1))
-        shift = jnp.log(2 * jnp.log(jnp.sum(others, dtype=dataset.dtype) / k))
+        # Exact duplicates add 1 to the count at every r.
+        m = jnp.sum(others, dtype=dataset.dtype)
+        n0 = jnp.sum(others & (d2_ == 0), dtype=dataset.dtype)
+        shift = jnp.log(2 * jnp.log((m - n0) / (k - n0)))
         lo, hi = lax.fori_loop(
             0,
             12,

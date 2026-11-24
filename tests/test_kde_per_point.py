@@ -171,3 +171,24 @@ def test_local_covariance_second_derivatives():
     h = 1e-5
     fd = (jax.grad(f)(h) - jax.grad(f)(-h)) / (2 * h)
     np.testing.assert_allclose(jax.grad(jax.grad(f))(0.0), fd, rtol=1e-6)
+
+
+def test_local_covariance_with_exact_duplicates():
+    # A noisy ring with 17 copies of its centre, fewer than k = 18. The copies
+    # move together, so they stay duplicates.
+    k1, k2, k3 = jr.split(jr.key(14), 3)
+    theta = jnp.linspace(0, 2 * jnp.pi, 300, endpoint=False)
+    ring = jnp.stack([jnp.cos(theta), jnp.sin(theta)])
+    ring = ring + 0.05 * jr.normal(k1, ring.shape)
+    data = jnp.concatenate([ring, jnp.zeros((2, 17))], axis=1)
+    v = jnp.concatenate(
+        [jr.normal(k2, ring.shape), jnp.tile(jr.normal(k3, (2, 1)), (1, 17))],
+        axis=1,
+    )
+
+    def f(t):
+        kde = MultiVariateGaussianKDE.from_local_covariance(data + t * v)
+        return jnp.sum(kde.covariance[-1])
+
+    h = 1e-6
+    np.testing.assert_allclose(jax.grad(f)(0.0), (f(h) - f(-h)) / (2 * h), rtol=1e-6)
