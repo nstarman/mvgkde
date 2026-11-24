@@ -216,7 +216,10 @@ class MultiVariateGaussianKDE:
         *,
         batch_size: Antd[
             int,
-            Doc("Points evaluated at once with per-point kernels."),
+            Doc(
+                "Points evaluated at once with per-point kernels. A Python "
+                "int; mark it static if you jit this method.",
+            ),
         ] = 128,
     ) -> Antd[EvalOnPoint, Doc("The values at each point.")]:
         """Evaluate the estimated pdf on a set of points."""
@@ -249,7 +252,10 @@ class MultiVariateGaussianKDE:
         *,
         batch_size: Antd[
             int,
-            Doc("Points evaluated at once with per-point kernels."),
+            Doc(
+                "Points evaluated at once with per-point kernels. A Python "
+                "int; mark it static if you jit this method.",
+            ),
         ] = 128,
     ) -> EvalOnPoint:
         """Log probability density function."""
@@ -301,8 +307,8 @@ class MultiVariateGaussianKDE:
             cov,
             shape=shape,
             dtype=self.dataset.dtype,
-        ).T
-        return self.dataset[:, ind] + eps
+        )
+        return self.dataset[:, ind] + jnp.moveaxis(eps, -1, 0)
 
     def marginal(
         self,
@@ -744,10 +750,10 @@ def _local_covariance(
                 jnp.max(jnp.where(pos, log_d2, -jnp.inf)) - shift,
             ),
         )
-        # Polish with Newton. Only the last step sees d2, so its gradient is
-        # the implicit-function gradient of the root.
-        s = newton(newton((lo + hi) / 2, d2_), d2_)
-        s = newton(s, d2)
+        # Polish with Newton. Only the last two steps see d2. One step gives the
+        # exact first derivative of the root, two give exact second derivatives.
+        s = newton((lo + hi) / 2, d2_)
+        s = newton(newton(s, d2), d2)
 
         w = jnp.where(others, weights * jnp.exp(-0.5 * d2 * jnp.exp(-s)), 0)
         v1, v2 = jnp.sum(w), jnp.sum(jnp.square(w))

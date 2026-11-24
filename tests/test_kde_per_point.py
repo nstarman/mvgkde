@@ -144,3 +144,30 @@ def test_float32_data_keeps_float32_kernels():
     kde = MultiVariateGaussianKDE.from_local_covariance(data)
     assert kde.covariance.dtype == jnp.float32
     assert kde.logpdf(on_arc().astype(jnp.float32)).dtype == jnp.float32
+
+
+def test_resample_uses_each_points_own_kernel():
+    # A tight kernel at 0 and a wide one at 100: the samples near 0 must be tight,
+    # also when the batch shape is square and its axes could be swapped.
+    data = jnp.array([[0.0, 100.0], [0.0, 0.0]])
+    cov = jnp.stack([1e-6 * jnp.eye(2), 100 * jnp.eye(2)])
+    kde = MultiVariateGaussianKDE.from_covariance(data, cov)
+    for shape in [(400,), (20, 20), (2, 10, 20)]:
+        x = kde.resample(jr.key(11), shape)
+        assert x.shape == (2, *shape)
+        near = jnp.abs(x[0]) < 50
+        assert jnp.std(jnp.where(near, x[0], 0)) < 1e-2
+
+
+def test_local_covariance_second_derivatives():
+    data = arc(jr.key(12), n=100)
+    v = jr.normal(jr.key(13), data.shape)
+
+    def f(t):
+        return jnp.sum(
+            MultiVariateGaussianKDE.from_local_covariance(data + t * v).covariance,
+        )
+
+    h = 1e-5
+    fd = (jax.grad(f)(h) - jax.grad(f)(-h)) / (2 * h)
+    np.testing.assert_allclose(jax.grad(jax.grad(f))(0.0), fd, rtol=1e-6)
