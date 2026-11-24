@@ -681,10 +681,12 @@ def _per_point_kernel_eval(
     def one(x: Float[Array, "F"]) -> Scalar:
         z = jnp.einsum("nf,nfg->ng", points - x, whitening)
         arg = log_norm - 0.5 * jnp.sum(jnp.square(z), axis=-1)
-        if in_log:
-            return special.logsumexp(arg, b=values)
-        # Skip zero weights, as logsumexp does, in case their kernel is NaN.
-        return jnp.sum(jnp.where(values > 0, values * jnp.exp(arg), 0))
+        # A zero-weight point's kernel may be NaN; drop only those terms, so the
+        # gradient with respect to a zero weight is kept.
+        arg = jnp.where(jnp.isfinite(arg) | (values > 0), arg, -jnp.inf)
+        if in_log:  # as `_gaussian_kernel_eval`
+            return special.logsumexp(jnp.log(values) + arg)
+        return jnp.sum(values * jnp.exp(arg))
 
     # checkpoint, so reverse mode keeps batch_size * N * F values, not M * N * F
     return lax.map(jax.checkpoint(one), xi, batch_size=batch_size)

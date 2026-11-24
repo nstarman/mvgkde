@@ -258,7 +258,7 @@ def test_local_covariance_with_a_very_close_pair():
     )
 
 
-def test_nan_kernel_of_a_zero_weight_point_is_ignored():
+def test_nan_kernel_of_a_zero_weight_point_keeps_the_density_finite():
     # The zero-weight copy of point 0 has 10 exact duplicates with weight, so
     # its own kernel is NaN, but it has no weight in the density.
     base = jr.normal(jr.key(17), (2, 100))
@@ -268,3 +268,25 @@ def test_nan_kernel_of_a_zero_weight_point_is_ignored():
     pts = on_arc(5)
     assert jnp.all(jnp.isfinite(kde.evaluate(pts)))
     np.testing.assert_allclose(jnp.log(kde.evaluate(pts)), kde.logpdf(pts), rtol=1e-12)
+
+
+def test_weight_gradients_match_shared_path():
+    # Includes a zero weight, where evaluate is still linear in the weight.
+    data = jr.normal(jr.key(18), (2, 20))
+    cov = jnp.array([[0.3, 0.1], [0.1, 0.2]])
+    w = jnp.ones(20).at[3].set(0.0)
+    pts = jr.normal(jr.key(19), (2, 3))
+
+    def grads(c, method):
+        def f(w):
+            kde = MultiVariateGaussianKDE.from_covariance(data, c, weights=w)
+            return jnp.sum(getattr(kde, method)(pts))
+
+        return jax.grad(f)(w)
+
+    per_pt = jnp.broadcast_to(cov, (20, 2, 2))
+    g_shared, g_pp = grads(cov, "evaluate"), grads(per_pt, "evaluate")
+    np.testing.assert_allclose(g_pp, g_shared, rtol=1e-12, atol=1e-15)
+    pos = w > 0
+    g_shared, g_pp = grads(cov, "logpdf"), grads(per_pt, "logpdf")
+    np.testing.assert_allclose(g_pp[pos], g_shared[pos], rtol=1e-12, atol=1e-15)
