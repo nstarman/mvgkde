@@ -290,3 +290,11 @@ def test_weight_gradients_match_shared_path():
     pos = w > 0
     g_shared, g_pp = grads(cov, "logpdf"), grads(per_pt, "logpdf")
     np.testing.assert_allclose(g_pp[pos], g_shared[pos], rtol=1e-12, atol=1e-15)
+
+
+def test_float32_kernels_far_from_the_origin():
+    # Rounding must scale with the distances between points, not with |x|.
+    data = (arc(jr.key(20)) + 1e4).astype(jnp.float32)
+    k32 = MultiVariateGaussianKDE.from_local_covariance(data)
+    k64 = MultiVariateGaussianKDE.from_local_covariance(data.astype(jnp.float64))
+    np.testing.assert_allclose(k32.covariance, k64.covariance, rtol=1e-3, atol=1e-9)

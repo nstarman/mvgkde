@@ -144,7 +144,7 @@ local = MultiVariateGaussianKDE.from_local_covariance(arc)
 `from_local_covariance` gives each data point its own kernel, so `covariance`
 has shape `(N, d, d)`. Each kernel is Scott's factor for `k` points, squared,
 times the weighted covariance of the point's neighbours. The default is
-`k = round(sqrt(N))`. Neighbour `j` gets weight `w_j exp(-d_j² / 2r²)`, where
+`k = round(sqrt(n))`, with `n` the number of points with positive weight. Neighbour `j` gets weight `w_j exp(-d_j² / 2r²)`, where
 `r` is chosen so the Gaussian factors of the other points sum to `k`. That makes
 `r` a smooth version of the distance to the `k`-th nearest neighbour, so the
 density and its gradients change smoothly when the data move. You can also pass

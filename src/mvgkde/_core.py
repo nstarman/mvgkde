@@ -162,6 +162,8 @@ class MultiVariateGaussianKDE:
 
         Points with zero weight do not change any kernel, nor the default
         ``k = round(sqrt(n))``, where ``n`` counts points with positive weight.
+        Each kernel needs about ``F + 1`` effective neighbours to be full rank,
+        so ``n`` should be at least ``F + 2`` and ``k`` not much below ``F``.
         ``k`` must be less than ``n - 1``, so the default needs ``n >= 4``, and
         no point may have ``k`` exact duplicates. Otherwise the kernels are NaN.
         Rounded or binned data can easily have that many duplicates.
@@ -708,18 +710,18 @@ def _local_covariance(
     k = jnp.round(jnp.sqrt(jnp.sum(keep, dtype=dataset.dtype))) if k is None else k
     k = jnp.asarray(k, dtype=dataset.dtype)
 
-    # Distances are measured after whitening by ``metric``.
-    y = linalg.solve_triangular(
-        linalg.cholesky(metric, lower=True),
-        dataset,
-        lower=True,
-    ).T
+    # Distances are measured after whitening by ``metric``. Everything below is
+    # in offsets from point i, so float32 rounding scales with the distances
+    # between points, not with how far they are from the origin.
+    chol = linalg.cholesky(metric, lower=True)
     x = dataset.T
 
     def one(args: tuple[Float[Array, "F"], Int[Array, ""]]) -> Float[Array, "F F"]:
-        yi, i = args
+        xi, i = args
         others = keep & (jnp.arange(n) != i)
-        d2 = jnp.sum(jnp.square(y - yi), axis=-1)
+        dx = x - xi
+        y = linalg.solve_triangular(chol, dx.T, lower=True)
+        d2 = jnp.sum(jnp.square(y), axis=0)
 
         # log r^2 solves count(log r^2) = k: the Gaussian factors of the other
         # points with weight sum to k. This is a smooth version of the distance
@@ -765,11 +767,11 @@ def _local_covariance(
 
         w = jnp.where(others, weights * jnp.exp(-0.5 * d2 * jnp.exp(-s)), 0)
         v1, v2 = jnp.sum(w), jnp.sum(jnp.square(w))
-        dx = x - w @ x / v1
+        dx = dx - w @ dx / v1
         return jnp.einsum("n,ni,nj->ij", w, dx, dx) / (v1 - v2 / v1)  # as jnp.cov
 
     # checkpoint, so reverse mode keeps batch_size * N * F values, not N * N * F
-    cov = lax.map(jax.checkpoint(one), (y, jnp.arange(n)), batch_size=batch_size)
+    cov = lax.map(jax.checkpoint(one), (x, jnp.arange(n)), batch_size=batch_size)
     return scotts_factor(k, d) ** 2 * cov
 
 
