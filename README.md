@@ -125,6 +125,55 @@ plt.show()
 
 ![Covariance Matrix](https://raw.githubusercontent.com/nstarman/mvgkde/main/docs/cov.png)
 
+### Per-point kernels
+
+Every example so far uses one kernel for all the data points. That works badly
+for data along a thin curve, because one covariance can't be narrow across the
+curve and long along it everywhere at once. Here is a thin half-circle arc:
+
+```python
+k1, k2 = jr.split(jr.key(1))
+theta = jr.uniform(k1, (500,), minval=0, maxval=jnp.pi)
+r = 1 + 0.02 * jr.normal(k2, (500,))
+arc = jnp.stack([r * jnp.cos(theta), r * jnp.sin(theta)])
+
+shared = gaussian_kde(arc)
+local = MultiVariateGaussianKDE.from_local_covariance(arc)
+```
+
+`from_local_covariance` gives each data point its own kernel, so `covariance`
+has shape `(N, d, d)`. Each kernel is Scott's factor for `k` points, squared,
+times the weighted covariance of the point's neighbours. The default is
+`k = round(sqrt(N))`. Neighbour `j` gets weight `w_j exp(-d_j² / 2r²)`, where
+`r` is chosen so the Gaussian factors of the other points sum to `k`. That
+makes `r` a smooth version of the distance to the `k`-th nearest neighbour, so
+the density and its gradients change smoothly when the data move. You can also
+pass your own `(N, d, d)` covariance to `from_covariance`.
+
+```python
+X, Y = np.mgrid[-1.2:1.2:300j, -0.2:1.2:175j]
+grid = np.vstack([X.ravel(), Y.ravel()])
+
+fig, axs = plt.subplots(1, 2, figsize=(10, 3.4), sharey=True)
+for ax, kde, title in [
+    (axs[0], shared, "One shared kernel"),
+    (axs[1], local, "Per-point kernels"),
+]:
+    Z = np.reshape(kde(grid), X.shape)
+    ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r, extent=[-1.2, 1.2, -0.2, 1.2])
+    ax.plot(arc[0], arc[1], "k.", markersize=1)
+    ax.set(title=title, xlabel="X-axis")
+plt.show()
+```
+
+![Per-point kernels](https://raw.githubusercontent.com/nstarman/mvgkde/main/docs/local_cov.png)
+
+On the left, the shared kernel smears the arc across its inside. On the right,
+each kernel lies along the arc, and the density stays as thin as the data.
+`evaluate`, `logpdf`, `resample`, `marginal` and `integrate_gaussian` all work
+with per-point kernels. `evaluate` and `logpdf` take a `batch_size`, so memory
+grows as `batch_size * N * d`.
+
 ## Acknowledgments
 
 This package modifies code from [JAX](https://github.com/google/jax), which is
