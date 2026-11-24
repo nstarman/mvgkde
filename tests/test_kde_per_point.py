@@ -192,3 +192,43 @@ def test_local_covariance_with_exact_duplicates():
 
     h = 1e-6
     np.testing.assert_allclose(jax.grad(f)(0.0), (f(h) - f(-h)) / (2 * h), rtol=1e-6)
+
+
+def test_local_covariance_matches_brute_force_reference():
+    from scipy.optimize import brentq
+    from scipy.stats import multivariate_normal
+
+    rng = np.random.default_rng(15)
+    data = rng.normal(size=(2, 30)) * np.array([[3.0], [0.5]])
+    data[1] += 0.3 * data[0] ** 2
+    w = rng.uniform(0.2, 2.0, 30)
+    w[[4, 17]] = 0.0
+    kde = MultiVariateGaussianKDE.from_local_covariance(data, weights=w, k=4)
+
+    keep = w > 0
+    metric = np.cov(data[:, keep], aweights=w[keep])
+    y = np.linalg.solve(np.linalg.cholesky(metric), data).T
+    ref = []
+    for i in range(30):
+        others = keep & (np.arange(30) != i)
+        d2 = np.sum((y - y[i]) ** 2, axis=-1)[others]
+        r2 = brentq(
+            lambda r2: np.sum(np.exp(-0.5 * d2 / r2)) - 4,
+            1e-8,
+            1e8,
+            xtol=1e-14,
+            rtol=1e-15,
+        )
+        g = w[others] * np.exp(-0.5 * d2 / r2)
+        ref.append(4 ** (-2 / 6) * np.cov(data[:, others], aweights=g))
+    ref = np.array(ref)
+    np.testing.assert_allclose(kde.covariance, ref, rtol=1e-10)
+
+    # The density with these distinct kernels, summed directly.
+    pts = rng.normal(size=(2, 7))
+    direct = sum(
+        w[j] / w.sum() * multivariate_normal(data[:, j], ref[j]).pdf(pts.T)
+        for j in range(30)
+    )
+    np.testing.assert_allclose(kde.evaluate(pts, batch_size=3), direct, rtol=1e-10)
+    np.testing.assert_allclose(kde.logpdf(pts), np.log(direct), rtol=1e-10)

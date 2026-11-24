@@ -286,8 +286,8 @@ class MultiVariateGaussianKDE:
         shape: Antd[
             tuple[int, ...],
             Doc(
-                "A tuple of nonnegative integers specifying the result batch shape;"
-                "that is, the prefix of the result shape excluding the last axis.",
+                "A tuple of nonnegative integers specifying the result batch shape; "
+                "the result has shape (F, *shape).",
             ),
         ] = (),
     ) -> Antd[Float[Array, "F {shape}"], Doc("The resampled dataset.")]:
