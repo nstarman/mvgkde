@@ -163,6 +163,7 @@ for ax, kde, title in [
     ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r, extent=[-1.2, 1.2, -0.2, 1.2])
     ax.plot(arc[0], arc[1], "k.", markersize=1)
     ax.set(title=title, xlabel="X-axis")
+axs[0].set_ylabel("Y-axis")
 plt.show()
 ```
 

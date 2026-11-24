@@ -11,6 +11,7 @@ from functools import partial
 from typing import Annotated as Antd, Any, Literal, Never, TypeAlias, cast, final
 from typing_extensions import Doc
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import jit, lax, random, vmap
@@ -161,11 +162,17 @@ class MultiVariateGaussianKDE:
 
         Points with zero weight do not change any kernel, nor the default
         ``k = round(sqrt(n))``, where ``n`` counts points with positive weight.
-        ``k`` must be less than ``n - 1``, and no point may have ``k`` exact
-        duplicates.
+        ``k`` must be less than ``n - 1``, so the default needs ``n >= 4``, and
+        no point may have ``k`` exact duplicates. Otherwise the kernels are NaN.
+        Rounded or binned data can easily have that many duplicates.
+
+        The weights scale each neighbour's contribution, but ``r_i`` and the
+        default ``k`` only count which points have positive weight. So the
+        kernels are smooth in positive weights, and jump when a weight moves
+        between zero and a positive value.
 
         ``batch_size`` points are processed at a time, so memory scales as
-        ``batch_size * N * F``.
+        ``batch_size * N * F``, also under ``jax.grad``.
 
         Examples
         --------
@@ -672,7 +679,8 @@ def _per_point_kernel_eval(
             return special.logsumexp(arg, b=values)
         return jnp.sum(values * jnp.exp(arg))
 
-    return lax.map(one, xi, batch_size=batch_size)
+    # checkpoint, so reverse mode keeps batch_size * N * F values, not M * N * F
+    return lax.map(jax.checkpoint(one), xi, batch_size=batch_size)
 
 
 @partial(jit, static_argnames=("batch_size",))
@@ -687,8 +695,9 @@ def _local_covariance(
     """Compute per-point kernel covariances, see `from_local_covariance`."""
     d, n = dataset.shape
     keep = weights > 0
-    if k is None:
-        k = jnp.round(jnp.sqrt(jnp.sum(keep))).astype(int)
+    # k is a float of the data's dtype, so it doesn't promote float32 data.
+    k = jnp.round(jnp.sqrt(jnp.sum(keep, dtype=dataset.dtype))) if k is None else k
+    k = jnp.asarray(k, dtype=dataset.dtype)
 
     # Distances are measured after whitening by ``metric``.
     y = linalg.solve_triangular(
@@ -725,7 +734,7 @@ def _local_covariance(
 
         pos = others & (d2_ > 0)
         log_d2 = jnp.log(jnp.where(pos, d2_, 1))
-        shift = jnp.log(2 * jnp.log(jnp.sum(others) / k))
+        shift = jnp.log(2 * jnp.log(jnp.sum(others, dtype=dataset.dtype) / k))
         lo, hi = lax.fori_loop(
             0,
             12,
@@ -745,7 +754,8 @@ def _local_covariance(
         dx = x - w @ x / v1
         return jnp.einsum("n,ni,nj->ij", w, dx, dx) / (v1 - v2 / v1)  # as jnp.cov
 
-    cov = lax.map(one, (y, jnp.arange(n)), batch_size=batch_size)
+    # checkpoint, so reverse mode keeps batch_size * N * F values, not N * N * F
+    cov = lax.map(jax.checkpoint(one), (y, jnp.arange(n)), batch_size=batch_size)
     return scotts_factor(k, d) ** 2 * cov
 
 

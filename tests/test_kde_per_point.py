@@ -122,3 +122,25 @@ def test_integrate_kde_rejects_per_point_kernels():
     kde = MultiVariateGaussianKDE.from_local_covariance(arc(jr.key(8)))
     with pytest.raises(NotImplementedError, match="per-point"):
         kde.integrate_kde(kde)
+
+
+def test_gradient_memory_is_not_quadratic():
+    def temp_bytes(n):
+        data = arc(jr.key(9), n=n)
+
+        def f(x):
+            kde = MultiVariateGaussianKDE.from_local_covariance(x, batch_size=64)
+            return jnp.sum(kde.logpdf(x, batch_size=64))
+
+        compiled = jax.jit(jax.grad(f)).lower(data).compile()
+        return compiled.memory_analysis().temp_size_in_bytes
+
+    # N^2 memory would grow 4 times when N doubles.
+    assert temp_bytes(2000) < 2.5 * temp_bytes(1000)
+
+
+def test_float32_data_keeps_float32_kernels():
+    data = arc(jr.key(10)).astype(jnp.float32)
+    kde = MultiVariateGaussianKDE.from_local_covariance(data)
+    assert kde.covariance.dtype == jnp.float32
+    assert kde.logpdf(on_arc().astype(jnp.float32)).dtype == jnp.float32
