@@ -187,10 +187,14 @@ class MultiVariateGaussianKDE:
 
         """
         kde = cls.from_bandwidth(dataset, weights=weights)
+        # The metric's scale doesn't matter. Shifting to a data point first keeps
+        # float32 rounding independent of how far the data are from the origin.
+        offsets = kde.dataset - kde.dataset[:, :1]
+        metric = jnp.atleast_2d(jnp.cov(offsets, aweights=kde.weights))
         cov = _local_covariance(
             kde.dataset,
             kde.weights,
-            kde.covariance,
+            metric,
             k=k,
             batch_size=batch_size,
         )
@@ -413,7 +417,10 @@ class MultiVariateGaussianKDE:
         sigma = jnp.squeeze(jnp.sqrt(self.covariance))
         low = jnp.squeeze((low - self.dataset) / sigma)
         high = jnp.squeeze((high - self.dataset) / sigma)
-        return jnp.sum(self.weights * (special.ndtr(high) - special.ndtr(low)))
+        mass = special.ndtr(high) - special.ndtr(low)
+        # As in `evaluate`: a zero-weight point's kernel may be NaN.
+        mass = jnp.where(jnp.isfinite(mass) | (self.weights > 0), mass, 0)
+        return jnp.sum(self.weights * mass)
 
     def integrate_box(
         self,

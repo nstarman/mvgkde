@@ -294,7 +294,19 @@ def test_weight_gradients_match_shared_path():
 
 def test_float32_kernels_far_from_the_origin():
     # Rounding must scale with the distances between points, not with |x|.
-    data = (arc(jr.key(20)) + 1e4).astype(jnp.float32)
+    data = (arc(jr.key(20)) + 1e5).astype(jnp.float32)
     k32 = MultiVariateGaussianKDE.from_local_covariance(data)
     k64 = MultiVariateGaussianKDE.from_local_covariance(data.astype(jnp.float64))
-    np.testing.assert_allclose(k32.covariance, k64.covariance, rtol=1e-3, atol=1e-9)
+    # Error of each kernel, relative to its largest entry: about 3e-7, as at
+    # the origin.
+    err = jnp.max(jnp.abs(k32.covariance - k64.covariance), axis=(1, 2))
+    assert jnp.max(err / jnp.max(jnp.abs(k64.covariance), axis=(1, 2))) < 1e-5
+
+
+def test_nan_kernel_of_a_zero_weight_point_in_integrate_box_1d():
+    base = jr.normal(jr.key(21), (100,))
+    data = jnp.concatenate([base, jnp.full(10, base[0])])
+    w = jnp.ones(110).at[-1].set(0.0)
+    kde = MultiVariateGaussianKDE.from_local_covariance(data, weights=w)
+    assert not jnp.isfinite(kde.covariance[-1, 0, 0])
+    assert jnp.isfinite(kde.integrate_box_1d(-1.0, 1.0))
