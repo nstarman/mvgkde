@@ -8,6 +8,8 @@ import jax.numpy as jnp
 import jax.random as jr
 import numpy as np
 import pytest
+from scipy.optimize import brentq
+from scipy.stats import multivariate_normal
 
 from mvgkde import MultiVariateGaussianKDE
 
@@ -194,34 +196,35 @@ def test_local_covariance_with_exact_duplicates():
     np.testing.assert_allclose(jax.grad(f)(0.0), (f(h) - f(-h)) / (2 * h), rtol=1e-6)
 
 
-def test_local_covariance_matches_brute_force_reference():
-    from scipy.optimize import brentq
-    from scipy.stats import multivariate_normal
+def reference_kernels(data, w, k):
+    """Compute the kernels of `from_local_covariance` with brentq and np.cov."""
+    n, d = data.shape[1], data.shape[0]
+    keep = w > 0
+    metric = np.cov(data[:, keep], aweights=w[keep])
+    y = np.linalg.solve(np.linalg.cholesky(metric), data).T
+    out = []
+    for i in range(n):
+        others = keep & (np.arange(n) != i)
+        d2 = np.sum((y - y[i]) ** 2, axis=-1)[others]
+        log_d2 = np.log(d2[d2 > 0])
 
+        def count(s, d2=d2):
+            return np.sum(np.exp(-0.5 * d2 * np.exp(-s))) - k
+
+        s = brentq(count, log_d2.min() - 10, log_d2.max() + 10, xtol=1e-14)
+        g = w[others] * np.exp(-0.5 * d2 * np.exp(-s))
+        out.append(k ** (-2 / (d + 4)) * np.cov(data[:, others], aweights=g))
+    return np.array(out)
+
+
+def test_local_covariance_matches_brute_force_reference():
     rng = np.random.default_rng(15)
     data = rng.normal(size=(2, 30)) * np.array([[3.0], [0.5]])
     data[1] += 0.3 * data[0] ** 2
     w = rng.uniform(0.2, 2.0, 30)
     w[[4, 17]] = 0.0
     kde = MultiVariateGaussianKDE.from_local_covariance(data, weights=w, k=4)
-
-    keep = w > 0
-    metric = np.cov(data[:, keep], aweights=w[keep])
-    y = np.linalg.solve(np.linalg.cholesky(metric), data).T
-    ref = []
-    for i in range(30):
-        others = keep & (np.arange(30) != i)
-        d2 = np.sum((y - y[i]) ** 2, axis=-1)[others]
-        r2 = brentq(
-            lambda r2: np.sum(np.exp(-0.5 * d2 / r2)) - 4,
-            1e-8,
-            1e8,
-            xtol=1e-14,
-            rtol=1e-15,
-        )
-        g = w[others] * np.exp(-0.5 * d2 / r2)
-        ref.append(4 ** (-2 / 6) * np.cov(data[:, others], aweights=g))
-    ref = np.array(ref)
+    ref = reference_kernels(data, w, 4)
     np.testing.assert_allclose(kde.covariance, ref, rtol=1e-10)
 
     # The density with these distinct kernels, summed directly.
@@ -232,3 +235,36 @@ def test_local_covariance_matches_brute_force_reference():
     )
     np.testing.assert_allclose(kde.evaluate(pts, batch_size=3), direct, rtol=1e-10)
     np.testing.assert_allclose(kde.logpdf(pts), np.log(direct), rtol=1e-10)
+
+
+def test_local_covariance_with_a_very_close_pair():
+    # A pair 1e-145 apart, next to a far cluster, makes the bisection bracket
+    # about 700 wide in log r^2.
+    rng = np.random.default_rng(16)
+    data = np.concatenate(
+        [
+            np.array([[0.0, 1e-145], [0.0, 0.0]]),
+            rng.normal(size=(2, 1)),
+            rng.normal(size=(2, 71)) + np.array([[210.0], [0.0]]),
+        ],
+        axis=1,
+    )
+    w = np.ones(data.shape[1])
+    kde = MultiVariateGaussianKDE.from_local_covariance(data, k=2)
+    np.testing.assert_allclose(
+        kde.covariance,
+        reference_kernels(data, w, 2),
+        rtol=1e-10,
+    )
+
+
+def test_nan_kernel_of_a_zero_weight_point_is_ignored():
+    # The zero-weight copy of point 0 has 10 exact duplicates with weight, so
+    # its own kernel is NaN, but it has no weight in the density.
+    base = jr.normal(jr.key(17), (2, 100))
+    data = jnp.concatenate([base, jnp.tile(base[:, :1], (1, 10))], axis=1)
+    w = jnp.ones(110).at[-1].set(0.0)
+    kde = MultiVariateGaussianKDE.from_local_covariance(data, weights=w)
+    pts = on_arc(5)
+    assert jnp.all(jnp.isfinite(kde.evaluate(pts)))
+    np.testing.assert_allclose(jnp.log(kde.evaluate(pts)), kde.logpdf(pts), rtol=1e-12)

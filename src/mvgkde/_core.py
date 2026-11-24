@@ -683,7 +683,8 @@ def _per_point_kernel_eval(
         arg = log_norm - 0.5 * jnp.sum(jnp.square(z), axis=-1)
         if in_log:
             return special.logsumexp(arg, b=values)
-        return jnp.sum(values * jnp.exp(arg))
+        # Skip zero weights, as logsumexp does, in case their kernel is NaN.
+        return jnp.sum(jnp.where(values > 0, values * jnp.exp(arg), 0))
 
     # checkpoint, so reverse mode keeps batch_size * N * F values, not M * N * F
     return lax.map(jax.checkpoint(one), xi, batch_size=batch_size)
@@ -734,7 +735,7 @@ def _local_covariance(
         # the nearest, and the count is still at least, or at most, k.
         d2_ = lax.stop_gradient(d2)
 
-        def bisect(_: int, b: tuple[Scalar, Scalar]) -> tuple[Scalar, Scalar]:
+        def bisect(b: tuple[Scalar, Scalar]) -> tuple[Scalar, Scalar]:
             mid = (b[0] + b[1]) / 2
             low = count(mid, d2_)[0] < 0
             return jnp.where(low, mid, b[0]), jnp.where(low, b[1], mid)
@@ -745,9 +746,10 @@ def _local_covariance(
         m = jnp.sum(others, dtype=dataset.dtype)
         n0 = jnp.sum(others & (d2_ == 0), dtype=dataset.dtype)
         shift = jnp.log(2 * jnp.log((m - n0) / (k - n0)))
-        lo, hi = lax.fori_loop(
-            0,
-            12,
+        # Bisect until the bracket is 1e-3 wide; a very close pair can make it
+        # hundreds wide. A NaN bracket (outside the documented limits) stops.
+        lo, hi = lax.while_loop(
+            lambda b: b[1] - b[0] > 1e-3,
             bisect,
             (
                 jnp.min(jnp.where(pos, log_d2, jnp.inf)) - shift,
