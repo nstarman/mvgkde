@@ -869,7 +869,6 @@ dependencies = [
     { name = "jaxlib" },
     { name = "jaxtyping" },
     { name = "numpy" },
-    { name = "typing-extensions" },
 ]
 
 [package.dev-dependencies]
@@ -900,7 +899,6 @@ requires-dist = [
     { name = "jaxlib", specifier = ">=0.4.35" },
     { name = "jaxtyping", specifier = ">=0.2.34" },
     { name = "numpy", specifier = ">=2.1.2" },
-    { name = "typing-extensions", specifier = ">=4.12.2" },
 ]
 
 [package.metadata.requires-dev]
