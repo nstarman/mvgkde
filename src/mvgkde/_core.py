@@ -11,6 +11,7 @@ from functools import partial
 from typing import Annotated as Antd, Any, Literal, Never, TypeAlias, cast, final
 from typing_extensions import Doc
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import jit, lax, random, vmap
@@ -24,7 +25,7 @@ Scalar: TypeAlias = Float[Array, ""]
 Neff: TypeAlias = Float[Array, ""] | float
 Dataset: TypeAlias = Float[Array, "F N"] | Float[Array, "N"]
 Weights: TypeAlias = Float[Array, "N"]
-Cov: TypeAlias = Float[Array, "F F"]
+Cov: TypeAlias = Float[Array, "F F"] | Float[Array, "N F F"]
 Points: TypeAlias = Float[Array, "F"] | Float[Array, "F points"]
 EvalOnPoint: TypeAlias = Float[Array, ""] | Float[Array, "point"]
 
@@ -52,8 +53,14 @@ class MultiVariateGaussianKDE:
     ]
     weights: Antd[Weights, Doc("Weights for data points. Same shape as dataset.")]
     neff: Antd[Neff, Doc("Effective number of data points.")]
-    covariance: Antd[Cov, Doc("Covariance matrix.")]
-    inv_cov: Antd[Cov, Doc("Inverse covariance matrix.")]
+    covariance: Antd[
+        Cov,
+        Doc(
+            "Kernel covariance matrix. Shape (F, F) for one kernel shared by "
+            "every data point, or (N, F, F) for one kernel per data point.",
+        ),
+    ]
+    inv_cov: Antd[Cov, Doc("Inverse covariance matrix, same shape.")]
 
     def __post_init__(self) -> None:
         self._validate_dataset(self.dataset)
@@ -131,6 +138,68 @@ class MultiVariateGaussianKDE:
             inv_cov=inv_cov,
         )
 
+    @classmethod
+    def from_local_covariance(
+        cls,
+        dataset: Dataset,
+        /,
+        *,
+        k: int | None = None,
+        weights: Float[Array, "N"] | None = None,
+        batch_size: int = 128,
+    ) -> "MultiVariateGaussianKDE":
+        """Build a sample-point adaptive KDE, with one kernel per data point.
+
+        Each point's kernel is ``b**2`` times the weighted covariance of its
+        neighbours, with ``b`` Scott's factor for ``k`` points. Neighbour ``j``
+        of point ``i`` has weight ``w_j exp(-d_ij**2 / (2 r_i**2))``, and
+        ``r_i`` is set so that ``exp(-d_ij**2 / (2 r_i**2))`` summed over the
+        other points with weight is ``k``. This ``r_i`` is a smooth version of
+        the distance to the ``k``-th nearest neighbour, so the density and its
+        gradients have no jumps where the neighbour order changes. Distances
+        are Mahalanobis distances in the dataset's covariance, so the result
+        does not depend on the units of each dimension.
+
+        Points with zero weight do not change any kernel, nor the default
+        ``k = round(sqrt(n))``, where ``n`` counts points with positive weight.
+        Each kernel needs about ``F + 1`` effective neighbours to be full rank,
+        so ``n`` should be at least ``F + 2`` and ``k`` not much below ``F``.
+        ``k`` must be less than ``n - 1``, so the default needs ``n >= 4``, and
+        no point may have ``k`` exact duplicates. Otherwise the kernels are NaN.
+        Rounded or binned data can easily have that many duplicates.
+
+        The weights scale each neighbour's contribution, but ``r_i`` and the
+        default ``k`` only count which points have positive weight. So the
+        kernels are smooth in positive weights, and jump when a weight moves
+        between zero and a positive value.
+
+        ``batch_size`` points are processed at a time, so memory scales as
+        ``batch_size * N * F``, also under ``jax.grad``.
+
+        Examples
+        --------
+        >>> import jax.random as jr
+        >>> from mvgkde import MultiVariateGaussianKDE
+        >>> dataset = jr.normal(jr.key(0), (2, 200))
+        >>> kde = MultiVariateGaussianKDE.from_local_covariance(dataset)
+        >>> kde.covariance.shape
+        (200, 2, 2)
+
+        """
+        kde = cls.from_bandwidth(dataset, weights=weights)
+        # The metric's scale doesn't matter. Shifting to a data point first keeps
+        # float32 rounding independent of how far the data are from the origin.
+        offsets = kde.dataset - kde.dataset[:, :1]
+        metric = jnp.atleast_2d(jnp.cov(offsets, aweights=kde.weights))
+        cov = _local_covariance(
+            kde.dataset,
+            kde.weights,
+            metric,
+            k=k,
+            batch_size=batch_size,
+        )
+        return replace(kde, covariance=cov, inv_cov=linalg.inv(cov))
+
     # ====================================================================
     # Properties
 
@@ -150,10 +219,27 @@ class MultiVariateGaussianKDE:
     def evaluate(
         self,
         points: Points,
+        *,
+        batch_size: Antd[
+            int,
+            Doc(
+                "Points evaluated at once with per-point kernels. A Python "
+                "int; mark it static if you jit this method.",
+            ),
+        ] = 128,
     ) -> Antd[EvalOnPoint, Doc("The values at each point.")]:
         """Evaluate the estimated pdf on a set of points."""
         check_arraylike("evaluate", points)
         points = self._reshape_points(points)
+        if self.covariance.ndim == 3:
+            return _per_point_kernel_eval(
+                self.dataset.T,
+                self.weights,
+                points.T,
+                self.inv_cov,
+                in_log=False,
+                batch_size=batch_size,
+            )
         result = _gaussian_kernel_eval(
             self.dataset.T,
             self.weights[:, None],
@@ -166,10 +252,30 @@ class MultiVariateGaussianKDE:
     __call__ = evaluate
     pdf = evaluate
 
-    def logpdf(self, x: Points) -> EvalOnPoint:
+    def logpdf(
+        self,
+        x: Points,
+        *,
+        batch_size: Antd[
+            int,
+            Doc(
+                "Points evaluated at once with per-point kernels. A Python "
+                "int; mark it static if you jit this method.",
+            ),
+        ] = 128,
+    ) -> EvalOnPoint:
         """Log probability density function."""
         check_arraylike("logpdf", x)
         x = self._reshape_points(x)
+        if self.covariance.ndim == 3:
+            return _per_point_kernel_eval(
+                self.dataset.T,
+                self.weights,
+                x.T,
+                self.inv_cov,
+                in_log=True,
+                batch_size=batch_size,
+            )
         result = _gaussian_kernel_eval(
             self.dataset.T,
             self.weights[:, None],
@@ -186,8 +292,8 @@ class MultiVariateGaussianKDE:
         shape: Antd[
             tuple[int, ...],
             Doc(
-                "A tuple of nonnegative integers specifying the result batch shape;"
-                "that is, the prefix of the result shape excluding the last axis.",
+                "A tuple of nonnegative integers specifying the result batch shape; "
+                "the result has shape (F, *shape).",
             ),
         ] = (),
     ) -> Antd[Float[Array, "F {shape}"], Doc("The resampled dataset.")]:
@@ -200,14 +306,15 @@ class MultiVariateGaussianKDE:
         """
         ind_key, eps_key = random.split(key)
         ind = random.choice(ind_key, self.n, shape=shape, p=self.weights)
+        cov = self.covariance[ind] if self.covariance.ndim == 3 else self.covariance
         eps = random.multivariate_normal(
             eps_key,
             jnp.zeros(self.d, self.covariance.dtype),
-            self.covariance,
+            cov,
             shape=shape,
             dtype=self.dataset.dtype,
-        ).T
-        return self.dataset[:, ind] + eps
+        )
+        return self.dataset[:, ind] + jnp.moveaxis(eps, -1, 0)
 
     def marginal(
         self,
@@ -252,7 +359,7 @@ class MultiVariateGaussianKDE:
             )
             raise ValueError(msg)
 
-        new_cov = self.covariance[dims][:, dims]
+        new_cov = self.covariance[..., dims[:, None], dims]
         return replace(  # (weights, neff are unchanged)
             self,
             dataset=self.dataset[dims],
@@ -280,6 +387,16 @@ class MultiVariateGaussianKDE:
             msg = f"covariance does not have dimension {self.d}"
             raise ValueError(msg)
 
+        if self.covariance.ndim == 3:  # sum_j w_j N(mean; x_j, C_j + cov)
+            return _per_point_kernel_eval(
+                self.dataset.T,
+                self.weights,
+                mean[None],
+                linalg.inv(self.covariance + cov),
+                in_log=False,
+                batch_size=1,
+            )[0]
+
         chol = linalg.cho_factor(self.covariance + cov)
         norm = jnp.sqrt(2 * np.pi) ** self.d * jnp.prod(jnp.diag(chol[0]))
         norm = 1.0 / norm
@@ -300,7 +417,10 @@ class MultiVariateGaussianKDE:
         sigma = jnp.squeeze(jnp.sqrt(self.covariance))
         low = jnp.squeeze((low - self.dataset) / sigma)
         high = jnp.squeeze((high - self.dataset) / sigma)
-        return jnp.sum(self.weights * (special.ndtr(high) - special.ndtr(low)))
+        mass = special.ndtr(high) - special.ndtr(low)
+        # As in `evaluate`: a zero-weight point's kernel may be NaN.
+        mass = jnp.where(jnp.isfinite(mass) | (self.weights > 0), mass, 0)
+        return jnp.sum(self.weights * mass)
 
     def integrate_box(
         self,
@@ -321,6 +441,9 @@ class MultiVariateGaussianKDE:
         if other.d != self.d:
             msg = "KDEs are not the same dimensionality"
             raise ValueError(msg)
+        if self.covariance.ndim == 3 or other.covariance.ndim == 3:
+            msg = "integrate_kde does not support per-point kernels"
+            raise NotImplementedError(msg)
 
         chol = linalg.cho_factor(self.covariance + other.covariance)
         norm = jnp.sqrt(2 * np.pi) ** self.d * jnp.prod(jnp.diag(chol[0]))
@@ -542,6 +665,121 @@ def _gaussian_kernel_eval(
     mapped_kernel = vmap(reduced_kernel)
 
     return mapped_kernel(xi)
+
+
+@partial(jit, static_argnames=("in_log", "batch_size"))
+def _per_point_kernel_eval(
+    points: Float[Array, "N F"],
+    values: Float[Array, "N"],
+    xi: Float[Array, "M F"],
+    invcov: Float[Array, "N F F"],
+    *,
+    in_log: bool,
+    batch_size: int,
+) -> Float[Array, "M"]:
+    """Evaluate like `_gaussian_kernel_eval`, with one precision per point."""
+    points, values, xi, invcov = promote_dtypes_inexact(points, values, xi, invcov)
+    d = points.shape[1]
+
+    whitening = jnp.linalg.cholesky(invcov)  # (N, F, F)
+    log_norm = jnp.sum(
+        jnp.log(jnp.diagonal(whitening, axis1=-2, axis2=-1)),
+        axis=-1,
+    ) - 0.5 * d * jnp.log(2 * np.pi)
+
+    def one(x: Float[Array, "F"]) -> Scalar:
+        z = jnp.einsum("nf,nfg->ng", points - x, whitening)
+        arg = log_norm - 0.5 * jnp.sum(jnp.square(z), axis=-1)
+        # A zero-weight point's kernel may be NaN; drop only those terms, so the
+        # gradient with respect to a zero weight is kept.
+        arg = jnp.where(jnp.isfinite(arg) | (values > 0), arg, -jnp.inf)
+        if in_log:  # as `_gaussian_kernel_eval`
+            return special.logsumexp(jnp.log(values) + arg)
+        return jnp.sum(values * jnp.exp(arg))
+
+    # checkpoint, so reverse mode keeps batch_size * N * F values, not M * N * F
+    return lax.map(jax.checkpoint(one), xi, batch_size=batch_size)
+
+
+@partial(jit, static_argnames=("batch_size",))
+def _local_covariance(
+    dataset: Float[Array, "F N"],
+    weights: Weights,
+    metric: Float[Array, "F F"],
+    *,
+    k: int | Int[Array, ""] | None,
+    batch_size: int,
+) -> Float[Array, "N F F"]:
+    """Compute per-point kernel covariances, see `from_local_covariance`."""
+    d, n = dataset.shape
+    keep = weights > 0
+    # k is a float of the data's dtype, so it doesn't promote float32 data.
+    k = jnp.round(jnp.sqrt(jnp.sum(keep, dtype=dataset.dtype))) if k is None else k
+    k = jnp.asarray(k, dtype=dataset.dtype)
+
+    # Distances are measured after whitening by ``metric``. Everything below is
+    # in offsets from point i, so float32 rounding scales with the distances
+    # between points, not with how far they are from the origin.
+    chol = linalg.cholesky(metric, lower=True)
+    x = dataset.T
+
+    def one(args: tuple[Float[Array, "F"], Int[Array, ""]]) -> Float[Array, "F F"]:
+        xi, i = args
+        others = keep & (jnp.arange(n) != i)
+        dx = x - xi
+        y = linalg.solve_triangular(chol, dx.T, lower=True)
+        d2 = jnp.sum(jnp.square(y), axis=0)
+
+        # log r^2 solves count(log r^2) = k: the Gaussian factors of the other
+        # points with weight sum to k. This is a smooth version of the distance
+        # to the k-th nearest neighbour, which has kinks where the order changes.
+        def count(s: Scalar, d2: Array) -> tuple[Scalar, Scalar]:
+            g = jnp.where(others, jnp.exp(-0.5 * d2 * jnp.exp(-s)), 0)
+            return jnp.sum(g) - k, jnp.sum(g * 0.5 * d2 * jnp.exp(-s))
+
+        def newton(s: Scalar, d2: Array) -> Scalar:
+            c, dc = count(s, d2)
+            return s - c / dc
+
+        # Bisect without gradients. At the ends of the bracket every other point
+        # that isn't an exact duplicate is as far as the farthest, or as near as
+        # the nearest, and the count is still at least, or at most, k.
+        d2_ = lax.stop_gradient(d2)
+
+        def bisect(b: tuple[Scalar, Scalar]) -> tuple[Scalar, Scalar]:
+            mid = (b[0] + b[1]) / 2
+            low = count(mid, d2_)[0] < 0
+            return jnp.where(low, mid, b[0]), jnp.where(low, b[1], mid)
+
+        pos = others & (d2_ > 0)
+        log_d2 = jnp.log(jnp.where(pos, d2_, 1))
+        # Exact duplicates add 1 to the count at every r.
+        m = jnp.sum(others, dtype=dataset.dtype)
+        n0 = jnp.sum(others & (d2_ == 0), dtype=dataset.dtype)
+        shift = jnp.log(2 * jnp.log((m - n0) / (k - n0)))
+        # Bisect until the bracket is 1e-3 wide; a very close pair can make it
+        # hundreds wide. A NaN bracket (outside the documented limits) stops.
+        lo, hi = lax.while_loop(
+            lambda b: b[1] - b[0] > 1e-3,
+            bisect,
+            (
+                jnp.min(jnp.where(pos, log_d2, jnp.inf)) - shift,
+                jnp.max(jnp.where(pos, log_d2, -jnp.inf)) - shift,
+            ),
+        )
+        # Polish with Newton. Only the last two steps see d2. One step gives the
+        # exact first derivative of the root, two give exact second derivatives.
+        s = newton((lo + hi) / 2, d2_)
+        s = newton(newton(s, d2), d2)
+
+        w = jnp.where(others, weights * jnp.exp(-0.5 * d2 * jnp.exp(-s)), 0)
+        v1, v2 = jnp.sum(w), jnp.sum(jnp.square(w))
+        dx = dx - w @ dx / v1
+        return jnp.einsum("n,ni,nj->ij", w, dx, dx) / (v1 - v2 / v1)  # as jnp.cov
+
+    # checkpoint, so reverse mode keeps batch_size * N * F values, not N * N * F
+    cov = lax.map(jax.checkpoint(one), (x, jnp.arange(n)), batch_size=batch_size)
+    return scotts_factor(k, d) ** 2 * cov
 
 
 # ====================================================================
