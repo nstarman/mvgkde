@@ -58,6 +58,53 @@ pre-commit install # Will install a pre-commit hook into the git repo
 You can also/alternatively run `pre-commit run` (changes only) or
 `pre-commit run --all-files` to check even without installing the hook.
 
+# The code graph
+
+`graphify-out/graph.json` is a
+[graphify](https://github.com/Graphify-Labs/graphify) map of this repository:
+its symbols and the relationships between them. AI assistants query it instead
+of grepping, and you can too. Extraction is local tree-sitter parsing — no model
+call, and nothing leaves your machine — and every edge is marked `EXTRACTED`
+(explicit in the source) or `INFERRED` (resolved by graphify), so you can tell
+what was read from what was deduced.
+
+The graph is committed, and the commit checks rebuild it. Install the pinned
+release and register the merge driver once per clone, so two branches that both
+changed the graph merge cleanly:
+
+```bash
+uv tool install "graphifyy==0.9.119"
+PY="$(sed -n '1s/^#!//p' "$(command -v graphify)")"
+git config merge.graphify.name "graphify graph.json union merge"
+git config merge.graphify.driver "\"$PY\" -m graphify merge-driver %O %A %B"
+```
+
+Then query it:
+
+```bash
+graphify query "how is the kernel covariance used"  # a scoped subgraph for a question
+graphify explain "MultiVariateGaussianKDE"          # one symbol and its neighbours
+graphify path "gaussian_kde" "MultiVariateGaussianKDE"  # how two things connect
+```
+
+Day to day:
+
+- The rebuild runs with your other commit checks. Like a formatter, it rebuilds
+  and stops the commit; `git add graphify-out/graph.json` and commit again.
+- Commit without rebuilding: `SKIP=graphify-update git commit ...`.
+- If a rebuild is ever refused because the graph would shrink — you deleted code
+  — use `GRAPHIFY_FORCE=1 git commit ...`. It usually just shrinks and says
+  nothing.
+- If the graph ever conflicts in a merge, rebuild rather than edit it:
+  `rm graphify-out/graph.json && PYTHONHASHSEED=0 graphify update . --force && git add graphify-out/graph.json`.
+- A changed `graph.json` in a pull request is generated output. It is one line,
+  collapsed by GitHub, and is not reviewed.
+- The rebuild may rewrite the graph the first time you commit in a working
+  environment, and the weekly job may rewrite it back. That is expected:
+  graphify's output depends on which files are on disk, so a built checkout and
+  a fresh clone disagree about community numbering even though the symbols are
+  identical.
+
 # Testing
 
 Use pytest to run the unit checks:

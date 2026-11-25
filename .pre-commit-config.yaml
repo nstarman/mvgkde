@@ -2,6 +2,9 @@ ci:
   autoupdate_schedule: "quarterly"
   autoupdate_commit_msg: "chore: update pre-commit hooks"
   autofix_commit_msg: "style: pre-commit fixes"
+  # pre-commit.ci runs every hook over every file on Linux and pushes fixes. The graph
+  # is only reproducible from a fresh clone, so the commit hook is the one place it is rebuilt.
+  skip: [graphify-update]
 
 default_stages: [pre-commit, pre-push]
 
@@ -26,11 +29,13 @@ repos:
     rev: "v6.0.0"
     hooks:
       - id: check-added-large-files
+        exclude: ^graphify-out/graph\.json$
       - id: check-case-conflict
       - id: check-merge-conflict
       - id: check-yaml
       - id: debug-statements
       - id: end-of-file-fixer
+        exclude: ^graphify-out/graph\.json$
       - id: mixed-line-ending
       - id: name-tests-test
         args: ["--pytest-test-first"]
@@ -78,6 +83,7 @@ repos:
       - id: prettier
         types_or: [yaml, markdown, html, css, scss, javascript, json]
         args: [--prose-wrap=always]
+        exclude: ^graphify-out/graph\.json$
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: "v2.4.0"
@@ -89,7 +95,7 @@ repos:
     rev: "v2.4.3"
     hooks:
       - id: codespell
-        exclude: "uv.lock"
+        exclude: "uv.lock|^graphify-out/graph\\.json$"
 
   - repo: https://github.com/abravalheri/validate-pyproject
     rev: "0.26"
@@ -109,3 +115,18 @@ repos:
         language: pygrep
         entry: PyBind|Numpy|Cmake|CCache|Github|PyTest
         exclude: .pre-commit-config.yaml
+
+      # Keeps the committed code graph (graphify-out/graph.json) in step with the code.
+      # Like a formatter: if the graph changed, stage it and commit again.
+      # Skip once with `SKIP=graphify-update git commit ...`.
+      # This is the only place the graphify release is pinned; the weekly workflow
+      # .github/workflows/graphify.yml reads the version back out of this file.
+      - id: graphify-update
+        name: graphify update
+        language: python
+        additional_dependencies: ["graphifyy==0.9.119"]
+        entry: env PYTHONHASHSEED=0 graphify update . --force
+        pass_filenames: false
+        always_run: true
+        # default_stages includes pre-push; a second full rebuild on push can only repeat this one.
+        stages: [pre-commit]
