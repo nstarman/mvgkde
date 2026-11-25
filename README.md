@@ -176,6 +176,11 @@ each kernel lies along the arc, and the density stays as thin as the data.
 with per-point kernels. `evaluate` and `logpdf` take a `batch_size`, so memory
 grows as `batch_size * N * d`.
 
+## Contributing
+
+Contributors and AI assistants: this repository ships a queryable code graph —
+see [CONTRIBUTING.md](.github/CONTRIBUTING.md#the-code-graph).
+
 ## Acknowledgments
 
 This package modifies code from [JAX](https://github.com/google/jax), which is

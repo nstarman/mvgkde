@@ -25,7 +25,11 @@ def lint(s: nox.Session) -> None:
     """Run the linter."""
     # Not a real commit -- no-commit-to-branch would always fail here.
     # Merge into any SKIP already set, rather than clobber it.
-    skip = ",".join(filter(None, [os.environ.get("SKIP"), "no-commit-to-branch"]))
+    # graphify-update rebuilds the committed code graph, which is only reproducible
+    # from a fresh clone and varies by platform, so it runs at commit time only.
+    skip = ",".join(
+        filter(None, [os.environ.get("SKIP"), "no-commit-to-branch,graphify-update"]),
+    )
     s.run(
         "pre-commit",
         "run",
