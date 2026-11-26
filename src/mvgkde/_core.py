@@ -8,8 +8,7 @@ __all__ = ["MultiVariateGaussianKDE", "gaussian_kde"]
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Annotated as Antd, Any, Literal, Never, TypeAlias, cast, final
-from typing_extensions import Doc
+from typing import Any, Literal, Never, TypeAlias, cast, final
 
 import jax
 import jax.numpy as jnp
@@ -42,25 +41,28 @@ class MultiVariateGaussianKDE:
 
     JAX re-implementation of `scipy.stats.gaussian_kde`.
 
+    Attributes
+    ----------
+    dataset
+        Data for distribution estimation. If 1D, shape is (n_data,). If 2D,
+        shape is (n_dimensions, n_data).
+    weights
+        Weights for data points. Same shape as dataset.
+    neff
+        Effective number of data points.
+    covariance
+        Kernel covariance matrix. Shape (F, F) for one kernel shared by every
+        data point, or (N, F, F) for one kernel per data point.
+    inv_cov
+        Inverse covariance matrix, same shape.
+
     """
 
-    dataset: Antd[
-        Dataset,
-        Doc(
-            "Data for distribution estimation. If 1D, shape is (n_data,). "
-            "If 2D, shape is (n_dimensions, n_data).",
-        ),
-    ]
-    weights: Antd[Weights, Doc("Weights for data points. Same shape as dataset.")]
-    neff: Antd[Neff, Doc("Effective number of data points.")]
-    covariance: Antd[
-        Cov,
-        Doc(
-            "Kernel covariance matrix. Shape (F, F) for one kernel shared by "
-            "every data point, or (N, F, F) for one kernel per data point.",
-        ),
-    ]
-    inv_cov: Antd[Cov, Doc("Inverse covariance matrix, same shape.")]
+    dataset: Dataset
+    weights: Weights
+    neff: Neff
+    covariance: Cov
+    inv_cov: Cov
 
     def __post_init__(self) -> None:
         self._validate_dataset(self.dataset)
@@ -220,15 +222,24 @@ class MultiVariateGaussianKDE:
         self,
         points: Points,
         *,
-        batch_size: Antd[
-            int,
-            Doc(
-                "Points evaluated at once with per-point kernels. A Python "
-                "int; mark it static if you jit this method.",
-            ),
-        ] = 128,
-    ) -> Antd[EvalOnPoint, Doc("The values at each point.")]:
-        """Evaluate the estimated pdf on a set of points."""
+        batch_size: int = 128,
+    ) -> EvalOnPoint:
+        """Evaluate the estimated pdf on a set of points.
+
+        Parameters
+        ----------
+        points
+            The points to evaluate at.
+        batch_size
+            Points evaluated at once with per-point kernels. A Python int; mark
+            it static if you jit this method.
+
+        Returns
+        -------
+        EvalOnPoint
+            The values at each point.
+
+        """
         check_arraylike("evaluate", points)
         points = self._reshape_points(points)
         if self.covariance.ndim == 3:
@@ -256,15 +267,19 @@ class MultiVariateGaussianKDE:
         self,
         x: Points,
         *,
-        batch_size: Antd[
-            int,
-            Doc(
-                "Points evaluated at once with per-point kernels. A Python "
-                "int; mark it static if you jit this method.",
-            ),
-        ] = 128,
+        batch_size: int = 128,
     ) -> EvalOnPoint:
-        """Log probability density function."""
+        """Log probability density function.
+
+        Parameters
+        ----------
+        x
+            The points to evaluate at.
+        batch_size
+            Points evaluated at once with per-point kernels. A Python int; mark
+            it static if you jit this method.
+
+        """
         check_arraylike("logpdf", x)
         x = self._reshape_points(x)
         if self.covariance.ndim == 3:
@@ -287,17 +302,24 @@ class MultiVariateGaussianKDE:
 
     def resample(
         self,
-        key: Antd[PRNGKeyArray, Doc("PRNG key used as the random key.")],
+        key: PRNGKeyArray,
         /,
-        shape: Antd[
-            tuple[int, ...],
-            Doc(
-                "A tuple of nonnegative integers specifying the result batch shape; "
-                "the result has shape (F, *shape).",
-            ),
-        ] = (),
-    ) -> Antd[Float[Array, "F {shape}"], Doc("The resampled dataset.")]:
+        shape: tuple[int, ...] = (),
+    ) -> Float[Array, "F {shape}"]:
         """Randomly sample a dataset from the estimated pdf.
+
+        Parameters
+        ----------
+        key
+            PRNG key used as the random key.
+        shape
+            A tuple of nonnegative integers specifying the result batch shape;
+            the result has shape (F, *shape).
+
+        Returns
+        -------
+        Array
+            The resampled dataset.
 
         Note
         ----
@@ -318,16 +340,21 @@ class MultiVariateGaussianKDE:
 
     def marginal(
         self,
-        dimensions: Antd[
-            int | Int[Array, "subF"],
-            Doc(
-                "The dimensions of the multivariate distribution corresponding "
-                "with the marginal variables, that is, the indices of the dimensions "
-                "that are being retained. The other dimensions are marginalized out.",
-            ),
-        ],
-    ) -> Antd["MultiVariateGaussianKDE", Doc("The marginal distribution.")]:
+        dimensions: int | Int[Array, "subF"],
+    ) -> "MultiVariateGaussianKDE":
         """Return a marginal distribution over a subset of the dimensions.
+
+        Parameters
+        ----------
+        dimensions
+            The dimensions of the multivariate distribution corresponding with
+            the marginal variables, that is, the indices of the dimensions that
+            are being retained. The other dimensions are marginalized out.
+
+        Returns
+        -------
+        MultiVariateGaussianKDE
+            The marginal distribution.
 
         Note
         ----
@@ -372,10 +399,24 @@ class MultiVariateGaussianKDE:
 
     def integrate_gaussian(
         self,
-        mean: Antd[Float[Array, "F"], Doc("The mean of the Gaussian.")],
-        cov: Antd[Float[Array, "F F"], Doc("The covariance of the Gaussian.")],
-    ) -> Antd[Scalar, Doc("The value of the integral.")]:
-        """Integrate the distribution weighted by a multivariate Gaussian."""
+        mean: Float[Array, "F"],
+        cov: Float[Array, "F F"],
+    ) -> Scalar:
+        """Integrate the distribution weighted by a multivariate Gaussian.
+
+        Parameters
+        ----------
+        mean
+            The mean of the Gaussian.
+        cov
+            The covariance of the Gaussian.
+
+        Returns
+        -------
+        Scalar
+            The value of the integral.
+
+        """
         mean = jnp.atleast_1d(jnp.squeeze(mean))
 
         cov = jnp.atleast_2d(cov)
@@ -404,10 +445,24 @@ class MultiVariateGaussianKDE:
 
     def integrate_box_1d(
         self,
-        low: Antd[Scalar, Doc("lower bound of integration.")],
-        high: Antd[Scalar, Doc("upper bound of integration.")],
-    ) -> Antd[Scalar, Doc("The value of the integral.")]:
-        """Compute the integral of a 1D pdf between two bounds.."""
+        low: Scalar,
+        high: Scalar,
+    ) -> Scalar:
+        """Compute the integral of a 1D pdf between two bounds.
+
+        Parameters
+        ----------
+        low
+            Lower bound of integration.
+        high
+            Upper bound of integration.
+
+        Returns
+        -------
+        Scalar
+            The value of the integral.
+
+        """
         if self.d != 1:
             msg = "integrate_box_1d() only handles 1D pdfs"
             raise ValueError(msg)
@@ -424,20 +479,43 @@ class MultiVariateGaussianKDE:
 
     def integrate_box(
         self,
-        low_bounds: Antd[Any, Doc("lower bounds of integration.")],
-        high_bounds: Antd[Any, Doc("upper bounds of integration.")],
-        maxpts: Antd[Any, Doc("Maximum number of points for integration.")] = None,
+        low_bounds: Any,
+        high_bounds: Any,
+        maxpts: Any = None,
     ) -> Never:
-        """This method is not implemented in the JAX interface."""  # noqa: D401, D404
+        """This method is not implemented in the JAX interface.
+
+        Parameters
+        ----------
+        low_bounds
+            Lower bounds of integration.
+        high_bounds
+            Upper bounds of integration.
+        maxpts
+            Maximum number of points for integration.
+
+        """  # noqa: D401, D404
         del low_bounds, high_bounds, maxpts
         msg = "only 1D box integrations are supported; use `integrate_box_1d`"
         raise NotImplementedError(msg)
 
     def integrate_kde(
         self,
-        other: Antd["MultiVariateGaussianKDE", Doc("The other KDE.")],
-    ) -> Antd[Scalar, Doc("The value of the integral.")]:
-        """Integrate the product of two Gaussian KDE distributions."""
+        other: "MultiVariateGaussianKDE",
+    ) -> Scalar:
+        """Integrate the product of two Gaussian KDE distributions.
+
+        Parameters
+        ----------
+        other
+            The other KDE.
+
+        Returns
+        -------
+        Scalar
+            The value of the integral.
+
+        """
         if other.d != self.d:
             msg = "KDEs are not the same dimensionality"
             raise ValueError(msg)
@@ -566,10 +644,19 @@ class MultiVariateGaussianKDE:
     @classmethod
     def tree_unflatten(
         cls,
-        aux_data: Antd[Any, Doc("Unused auxiliary data.")],
+        aux_data: Any,
         children: tuple[Dataset, Weights, Neff, Cov, Cov],
     ) -> "MultiVariateGaussianKDE":
-        """Reconstruct a Gaussian KDE from its Pytree representation."""
+        """Reconstruct a Gaussian KDE from its Pytree representation.
+
+        Parameters
+        ----------
+        aux_data
+            Unused auxiliary data.
+        children
+            The flattened fields, as `tree_flatten` returns them.
+
+        """
         del aux_data
         kde = cls(
             dataset=children[0],
@@ -785,19 +872,29 @@ def _local_covariance(
 # ====================================================================
 
 
-def scotts_factor(
-    neff: Antd[Neff, Doc("Effective number of data points")],
-    features: Antd[int, Doc("Dimension of the datasets")],
-    /,
-) -> Scalar:
-    """Scott's factor for Gaussian KDE."""
+def scotts_factor(neff: Neff, features: int, /) -> Scalar:
+    """Scott's factor for Gaussian KDE.
+
+    Parameters
+    ----------
+    neff
+        Effective number of data points.
+    features
+        Dimension of the datasets.
+
+    """
     return jnp.power(neff, -1.0 / (features + 4))
 
 
-def silverman_factor(
-    neff: Antd[Neff, Doc("Effective number of data points")],
-    features: Antd[int, Doc("Dimension of the datasets")],
-    /,
-) -> Scalar:
-    """Silverman's factor for Gaussian KDE."""
+def silverman_factor(neff: Neff, features: int, /) -> Scalar:
+    """Silverman's factor for Gaussian KDE.
+
+    Parameters
+    ----------
+    neff
+        Effective number of data points.
+    features
+        Dimension of the datasets.
+
+    """
     return jnp.power(neff * (features + 2) / 4.0, -1.0 / (features + 4))
